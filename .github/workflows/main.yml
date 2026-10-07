@@ -1,10 +1,10 @@
-name: Windows RDP via Tailscale
+Name: Windows RDP via Tailscale
 
 on:
   workflow_dispatch:
     inputs:
       kunci_masuk:
-        description: 'Masukkan Passcode (Teks Biasa)'
+        description: 'Masukkan Kunci Masuk (Passcode)'
         required: true
         type: string
       tailscale_key:
@@ -27,47 +27,40 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Loading . . .
+      - name: Validasi Kunci Masuk dari Web
         env:
           KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
-          URL_WEBSITE: 'https://arianto12.lynk.id/p/ganjeng'
+        run: |
+          # GANTI URL DI BAWAH DENGAN ALAMAT WEB / HALAMAN HTML ANDA
+          $url = "https://arianto12.lynk.id/p/ganjeng"
+          
+          try {
+              # Mengambil HTML/konten dari situs web
+              $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
+              
+              # Menghapus tag HTML dan memisahkan teks berdasarkan baris baru atau koma
+              $rawText = $response.Content -replace '<[^>]+>', ' '
+              $daftarKunci = $rawText -split '[\r\n,]+' | ForEach-Object { $_.Trim() }
+              
+              # Pengecekan apakah input pengguna terdaftar di situs web
+              if ($daftarKunci -contains $env:KUNCI_INPUT.Trim()) {
+                  Write-Output "Kunci masuk valid. Memulai pembuatan RDP..."
+              } else {
+                  Write-Error "Kunci masuk salah atau tidak terdaftar di situs web! Akses ditolak."
+                  exit 1
+              }
+          } catch {
+              Write-Error "Gagal mengambil data kunci dari situs web. Error: $_"
+              exit 1
+          }
+
+      - name: Sembunyikan Data Sensitif dari Log
+        env:
           TS_KEY: ${{ github.event.inputs.tailscale_key }}
           RDP_PASS: ${{ github.event.inputs.password }}
         run: |
-          # Masking otomatis agar data sensitif dan URL tidak muncul di log
-          Write-Output "::add-mask::$env:KUNCI_INPUT"
-          Write-Output "::add-mask::$env:URL_WEBSITE"
-          Write-Output "::add-mask::$env:TS_KEY"
-          Write-Output "::add-mask::$env:RDP_PASS"
-
-          # Paksa penggunaan protokol TLS 1.2
-          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-          # Hitung Hash SHA-256 dari passcode input
-          $bytes = [System.Text.Encoding]::UTF8.GetBytes($env:KUNCI_INPUT)
-          $sha256 = [System.Security.Cryptography.SHA256]::Create()
-          $hashBytes = $sha256.ComputeHash($bytes)
-          $calculatedHash = ($hashBytes | ForEach-Object { $_.ToString("x2") }) -join ""
-
-          # Gunakan User-Agent Browser agar request tidak diblokir server
-          $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-
-          # Ambil konten website secara senyap
-          try {
-              $response = Invoke-WebRequest -Uri $env:URL_WEBSITE -UserAgent $ua -UseBasicParsing -ErrorAction Stop
-              $webContent = $response.Content
-          } catch {
-              Write-Error "Gagal terhubung ke server verifikasi! Detail Eror: $_"
-              exit 1
-          }
-
-          # Verifikasi kecocokan Hash SHA-256
-          if ($webContent.ToLower().Contains($calculatedHash.ToLower())) {
-              Write-Output "Verifikasi berhasil! Passcode cocok."
-          } else {
-              Write-Error "Akses ditolak! Passcode salah."
-              exit 1
-          }
+          echo "::add-mask::$env:TS_KEY"
+          echo "::add-mask::$env:RDP_PASS"
 
       - name: Aktifkan Remote Desktop & Buat Pengguna
         env:
@@ -124,6 +117,7 @@ jobs:
           Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
           
           Start-Sleep -Seconds 5
+          
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_KEY --accept-routes
 
       - name: Menjaga RDP Tetap Aktif
