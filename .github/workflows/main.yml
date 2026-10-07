@@ -10,7 +10,7 @@ on:
       user:
         description: 'Masukkan Username RDP'
         required: true
-        default: 'Evann'
+        default: 'Arianto'
         type: string
       password:
         description: 'Masukkan Password RDP'
@@ -95,12 +95,13 @@ jobs:
         env:
           RDP_USER: ${{ github.event.inputs.user }}
         run: |
-          # Animasi Loading Progress Bar
           Write-Host "Menginisialisasi Layanan RDP..." -ForegroundColor Cyan
-          for ($i = 0; $i -le 100; $i += 5) {$fill = [math]::Floor($i / 5)$bar = ("█" * $fill) + ("░" * (20 - $fill))
-              Write-Host ("`r Processing: [$bar] $i%" ) -NoNewline -ForegroundColor Yellow
-              Start-Sleep -Milliseconds 100
+          
+          for ($i = 0; $i -le 100; $i += 5) {$fill = [math]::Floor($i / 5);$bar = ("█" * $fill) + ("░" * (20 - $fill));
+              Write-Host ("`r Processing: [$bar] $i%" ) -NoNewline -ForegroundColor Yellow;
+              Start-Sleep -Milliseconds 100;
           }
+          
           Write-Host "`n[ OK ] Sistem Siap Digunakan!`n" -ForegroundColor Green
 
           $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
@@ -113,18 +114,17 @@ jobs:
           Write-Host " Status          : Aktif & Terhubung" -ForegroundColor Green
           Write-Host "==============================================" -ForegroundColor Cyan
           
-          # Real-time Uptime Tracker dengan Spinner
           $seconds = 0
           $spinner = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
           
           while ($true) {
-              $spinChar = $spinner[$seconds % $spinner.Length]
-              $hours = [math]::Floor($seconds / 3600)
-              $mins = [math]::Floor(($seconds % 3600) / 60)
-              $secs = $seconds % 60
-              $timeStr = "{0:D2}:{1:D2}:{2:D2}" -f $hours, $mins, $secs
+              $spinChar = $spinner[$seconds % $spinner.Length];
+              $hours = [math]::Floor($seconds / 3600);
+              $mins = [math]::Floor(($seconds % 3600) / 60);
+              $secs = $seconds % 60;
+              $timeStr = "{0:D2}:{1:D2}:{2:D2}" -f $hours, $mins, $secs;
               
-              Write-Host ("`r $spinChar RDP Berjalan \vert{} Uptime:$timeStr | Menjaga Koneksi..." ) -NoNewline -ForegroundColor Cyan
-              Start-Sleep -Seconds 1
-              $seconds++
+              Write-Host ("`r $spinChar RDP Berjalan \vert{} Uptime:$timeStr | Menjaga Koneksi..." ) -NoNewline -ForegroundColor Cyan;
+              Start-Sleep -Seconds 1;
+              $seconds++;
           }
