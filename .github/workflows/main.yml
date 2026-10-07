@@ -7,11 +7,6 @@ on:
         description: 'Masukkan Passcode (Teks Biasa)'
         required: true
         type: string
-      url_website:
-        description: 'URL Website HTML (Tempat simpan Hash SHA-256)'
-        required: true
-        default: 'https://domain-anda.com/passcode.html'
-        type: string
       tailscale_key:
         description: 'Masukkan Tailscale Auth Key'
         required: true
@@ -32,37 +27,38 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Validasi Passcode via SHA-256 Website (Tanpa Log Screen)
+      - name: Validasi Passcode via SHA-256 Website (Senyap)
         env:
           KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
-          URL_WEBSITE: ${{ github.event.inputs.url_website }}
+          URL_WEBSITE: 'https://arianto12.lynk.id/p/ganjeng'
           TS_KEY: ${{ github.event.inputs.tailscale_key }}
           RDP_PASS: ${{ github.event.inputs.password }}
         run: |
-          # 1. Masking data sensitif agar otomatis tersembunyi di log GitHub
+          # Masking otomatis agar data sensitif dan URL tidak muncul di log (berubah jadi ***)
           Write-Output "::add-mask::$env:KUNCI_INPUT"
+          Write-Output "::add-mask::$env:URL_WEBSITE"
           Write-Output "::add-mask::$env:TS_KEY"
           Write-Output "::add-mask::$env:RDP_PASS"
 
-          # 2. Hitung Hash SHA-256 dari passcode input secara senyap di memori
+          # Hitung Hash SHA-256 dari passcode input secara senyap di memori
           $bytes = [System.Text.Encoding]::UTF8.GetBytes($env:KUNCI_INPUT)
           $sha256 = [System.Security.Cryptography.SHA256]::Create()
           $hashBytes = $sha256.ComputeHash($bytes)
           $calculatedHash = ($hashBytes | ForEach-Object { $_.ToString("x2") }) -join ""
 
-          # 3. Ambil isi HTML dari website tanpa mencetaknya ke layar
+          # Ambil konten website secara senyap tanpa mencetak URL atau isi ke layar
           try {
               $webContent = (Invoke-WebRequest -Uri $env:URL_WEBSITE -UseBasicParsing -ErrorAction Stop).Content
           } catch {
-              Write-Error "Gagal terhubung ke website verifikasi passcode!"
+              Write-Error "Gagal terhubung ke server verifikasi!"
               exit 1
           }
 
-          # 4. Verifikasi kecocokan Hash SHA-256
+          # Verifikasi kecocokan Hash SHA-256
           if ($webContent.ToLower().Contains($calculatedHash.ToLower())) {
-              Write-Output "Verifikasi berhasil! Passcode cocok dengan Hash SHA-256 di website."
+              Write-Output "Verifikasi berhasil! Passcode cocok."
           } else {
-              Write-Error "Akses ditolak! Passcode salah atau Hash SHA-256 tidak ditemukan di website."
+              Write-Error "Akses ditolak! Passcode salah."
               exit 1
           }
 
