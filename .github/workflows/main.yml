@@ -31,17 +31,20 @@ jobs:
         env:
           KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
         run: |
+          # URL Web Validasi Passcode
           $url = "https://arianto12.lynk.id/p/ganjeng"
           
+          # Header User-Agent agar tidak langsung terdeteksi sebagai bot oleh Cloudflare
+          $headers = @{
+              "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+              "Accept"     = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          }
+          
           try {
-              # Mengambil konten dari halaman Lynk.id
-              $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
-              
-              # Menghapus tag HTML dan memisahkan teks berdasarkan baris atau spasi
+              $response = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing -TimeoutSec 15
               $rawText = $response.Content -replace '<[^>]+>', ' '
               $daftarKunci = $rawText -split '[\r\n,]+' | ForEach-Object { $_.Trim() }
               
-              # Pengecekan apakah input passcode ada di dalam konten web
               if ($daftarKunci -contains $env:KUNCI_INPUT.Trim()) {
                   Write-Output "Kunci masuk valid. Memulai pembuatan RDP..."
               } else {
