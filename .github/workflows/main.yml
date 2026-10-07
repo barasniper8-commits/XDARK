@@ -10,7 +10,7 @@ on:
       user:
         description: 'Masukkan Username RDP'
         required: true
-        default: 'Evann'
+        default: 'Evan123'
         type: string
       password:
         description: 'Masukkan Password RDP'
