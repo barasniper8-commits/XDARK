@@ -39,7 +39,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          $Password = ConvertTo-SecureString -String$env:RDP_PASS -AsPlainText -Force
+          $Password =$env:RDP_PASS | ConvertTo-SecureString -AsPlainText -Force
           New-LocalUser -Name $env:RDP_USER -Password $Password -PasswordNeverExpires:$true
           Add-LocalGroupMember -Group "Administrators" -Member $env:RDP_USER
 
