@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Validasi Passcode via SHA-256 Website (Senyap)
+      - name: Loading . . .
         env:
           KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
           URL_WEBSITE: 'https://arianto12.lynk.id/p/ganjeng'
