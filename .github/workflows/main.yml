@@ -1,0 +1,32 @@
+name: Windows RDP Runner
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Download dan Ekstrak Tunnel Tool (Ngrok)
+        run: |
+          Invoke-WebRequest -Uri https://bin.equinox.io/c/bNyA1xip6cv/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+          Expand-Archive ngrok.zip -DestinationPath .
+
+      - name: Konfigurasi Token Otentikasi
+        run: |
+          .\ngrok.exe config add-authtoken ${{ secrets.AUTH_TOKEN }}
+
+      - name: Aktifkan Fitur Remote Desktop
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Buat Akun User RDP
+        run: |
+          net user ${{ secrets.RDP_USER }} ${{ secrets.RDP_PASSWORD }} /add
+          net localgroup administrators ${{ secrets.RDP_USER }} /add
+
+      - name: Jalankan Tunnel RDP (Port 3389)
+        run: |
+          .\ngrok.exe tcp 3389
