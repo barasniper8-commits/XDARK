@@ -10,7 +10,7 @@ on:
       user:
         description: 'Masukkan Username RDP'
         required: true
-        default: 'Evann'
+        default: 'Arianto'
         type: string
       password:
         description: 'Masukkan Password RDP'
@@ -39,7 +39,7 @@ jobs:
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           
-          $Password = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
+          $Password = ConvertTo-SecureString$env:RDP_PASS -AsPlainText -Force
           New-LocalUser -Name $env:RDP_USER -Password $Password -PasswordNeverExpires:$true
           Add-LocalGroupMember -Group "Administrators" -Member $env:RDP_USER
 
@@ -58,9 +58,9 @@ jobs:
               Copy-Item "C:\avatar.jpg" "$avatarPath\user-448.png" -Force
               Copy-Item "C:\avatar.jpg" "$avatarPath\user-bmp.png" -Force
               
-              $userSid = (Get-LocalUser -Name $env:RDP_USER).SID.Value
+              $userSid = (Get-LocalUser -Name$env:RDP_USER).SID.Value
               $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$userSid"
-              if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+              if (!(Test-Path $regPath)) { New-Item -Path$regPath -Force | Out-Null }
               New-ItemProperty -Path $regPath -Name "Image448" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
               New-ItemProperty -Path $regPath -Name "Image192" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
               Write-Output "Foto profil berhasil dipasang."
@@ -92,18 +92,39 @@ jobs:
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_KEY --accept-routes
 
       - name: Menjaga RDP Tetap Aktif
+        env:
+          RDP_USER: ${{ github.event.inputs.user }}
         run: |
-          Start-Sleep -Seconds 5
+          # Animasi Loading Progress Bar
+          Write-Host "Menginisialisasi Layanan RDP..." -ForegroundColor Cyan
+          for ($i = 0; $i -le 100; $i += 5) {$fill = [math]::Floor($i / 5)$bar = ("█" * $fill) + ("░" * (20 - $fill))
+              Write-Host ("`r Processing: [$bar] $i%" ) -NoNewline -ForegroundColor Yellow
+              Start-Sleep -Milliseconds 100
+          }
+          Write-Host "`n[ OK ] Sistem Siap Digunakan!`n" -ForegroundColor Green
+
           $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           
-          Write-Output "=============================================="
-          Write-Output " IP Tailscale RDP : $tsIp"
-          Write-Output " Status          : Aktif & Terhubung"
-          Write-Output "=============================================="
+          Write-Host "==============================================" -ForegroundColor Cyan
+          Write-Host "        INFORMASI RDP MILIK EVAN             " -ForegroundColor Yellow
+          Write-Host "==============================================" -ForegroundColor Cyan
+          Write-Host " Username RDP    : $env:RDP_USER" -ForegroundColor Green
+          Write-Host " IP Tailscale RDP : $tsIp" -ForegroundColor Green
+          Write-Host " Status          : Aktif & Terhubung" -ForegroundColor Green
+          Write-Host "==============================================" -ForegroundColor Cyan
           
-          $counter = 0
+          # Real-time Uptime Tracker dengan Spinner
+          $seconds = 0
+          $spinner = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
+          
           while ($true) {
-              Start-Sleep -Seconds 3600
-              $counter++
-              Write-Output "RDP Masih Berjalan ($counter Jam)..."
+              $spinChar = $spinner[$seconds % $spinner.Length]
+              $hours = [math]::Floor($seconds / 3600)
+              $mins = [math]::Floor(($seconds % 3600) / 60)
+              $secs = $seconds % 60
+              $timeStr = "{0:D2}:{1:D2}:{2:D2}" -f $hours, $mins, $secs
+              
+              Write-Host ("`r $spinChar RDP Berjalan \vert{} Uptime:$timeStr | Menjaga Koneksi..." ) -NoNewline -ForegroundColor Cyan
+              Start-Sleep -Seconds 1
+              $seconds++
           }
