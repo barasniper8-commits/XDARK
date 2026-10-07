@@ -1,16 +1,20 @@
-name: Windows RDP via Tailscale
+name: Windows RDP melalui Tailscale
 
 on:
   workflow_dispatch:
     inputs:
+      kunci_masuk:
+        description: 'Masukkan Kunci Masuk (Passcode)'
+        required: true
+        type: string
       tailscale_key:
         description: 'Masukkan Tailscale Auth Key'
         required: true
         type: string
       user:
-        description: 'Masukkan Username RDP'
+        description: 'Masukkan Nama Pengguna RDP'
         required: true
-        default: 'Evan123'
+        default: 'Arianto'
         type: string
       password:
         description: 'Masukkan Password RDP'
@@ -21,8 +25,19 @@ jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 360
-
     steps:
+      - name: Validasi Kunci Masuk
+        env:
+          KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
+          KUNCI_SECRET: ${{ secrets.KUNCI_RAHASIA }}
+        run: |
+          $daftarKunci = $env:KUNCI_SECRET -split ','
+          if ($daftarKunci -notcontains $env:KUNCI_INPUT.Trim()) {
+              Write-Error "Kunci masuk salah atau tidak terdaftar! Akses ditolak."
+              exit 1
+          }
+          Write-Output "Kunci masuk valid. Memulai pembuatan RDP..."
+
       - name: Sembunyikan Data Sensitif dari Log
         env:
           TS_KEY: ${{ github.event.inputs.tailscale_key }}
@@ -38,8 +53,7 @@ jobs:
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-          $Password =$env:RDP_PASS | ConvertTo-SecureString -AsPlainText -Force
+          $Password = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
           New-LocalUser -Name $env:RDP_USER -Password $Password -PasswordNeverExpires:$true
           Add-LocalGroupMember -Group "Administrators" -Member $env:RDP_USER
 
@@ -47,20 +61,18 @@ jobs:
         env:
           RDP_USER: ${{ github.event.inputs.user }}
         run: |
-          # 1. Download & Pasang Foto Profil User
+          # 1. Unduh & Pasang Foto Profil Pengguna
           $avatarUrl = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjFqQRxOHnZXYINO_52beLKrfrMypBHzpnllWSHx6gQHO4yspMqi2skpfp8z0lvsOOWHjSJ6G33I8Y2rGXo8_FVAkrgnDxtYuWK_Z5go81NcvEoRV6koacWRU4HsXD0R3nqW69a1FJnxhzy2PI8z2PQKqxWIEc_mX3oOROBIj9Y3HW4NcEq6FcNzMyMMwA/s1600/1000184069.jpg"
           $avatarPath = "C:\ProgramData\Microsoft\User Account Pictures"
-          
           try {
               Invoke-WebRequest -Uri $avatarUrl -OutFile "C:\avatar.jpg" -UseBasicParsing -ErrorAction Stop
               Copy-Item "C:\avatar.jpg" "$avatarPath\user.png" -Force
               Copy-Item "C:\avatar.jpg" "$avatarPath\user-192.png" -Force
               Copy-Item "C:\avatar.jpg" "$avatarPath\user-448.png" -Force
               Copy-Item "C:\avatar.jpg" "$avatarPath\user-bmp.png" -Force
-              
-              $userSid = (Get-LocalUser -Name$env:RDP_USER).SID.Value
+              $userSid = (Get-LocalUser -Name $env:RDP_USER).SID.Value
               $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$userSid"
-              if (!(Test-Path $regPath)) { New-Item -Path$regPath -Force | Out-Null }
+              If (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
               New-ItemProperty -Path $regPath -Name "Image448" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
               New-ItemProperty -Path $regPath -Name "Image192" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
               Write-Output "Foto profil berhasil dipasang."
@@ -68,7 +80,7 @@ jobs:
               Write-Output "Peringatan: Gagal mengunduh foto profil, melewati bagian ini..."
           }
 
-          # 2. Download & Pasang Wallpaper Desktop
+          # 2. Unduh & Pasang Wallpaper Desktop
           $wallpaperUrl = "https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEgRFqAvUV6j9-n3L65cySSsdK3JHZ88fKJlquXCK5pGhNRRlOmYfnIb3Zk4Y7SUC232-P5VcYgFZgiJ7jPfTR4HUmKtiOLG60FzYgby4m52MHOgXB0JuV5KZaR_3tdOPH5USQOqBx2GHYj_KTnntxjNzKKIh0VPFLAOaNoBlVJZi13KPvoWgjRRseVZObA/s1600/1000184023.jpg"
           try {
               Invoke-WebRequest -Uri $wallpaperUrl -OutFile "C:\wallpaper.png" -UseBasicParsing -ErrorAction Stop
@@ -80,48 +92,26 @@ jobs:
               Write-Output "Peringatan: Gagal mengunduh wallpaper, melewati bagian ini..."
           }
 
-      - name: Install & Hubungkan Tailscale
+      - name: Instal & Hubungkan Tailscale
         env:
           TS_KEY: ${{ github.event.inputs.tailscale_key }}
         run: |
           Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe" -UseBasicParsing
           Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
-          
           Start-Sleep -Seconds 5
-          
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_KEY --accept-routes
 
       - name: Menjaga RDP Tetap Aktif
-        env:
-          RDP_USER: ${{ github.event.inputs.user }}
         run: |
-          Write-Host "Menginisialisasi Layanan RDP..." -ForegroundColor Cyan
-          
-          for ($i = 0; $i -le 100; $i += 5) {$fill = [math]::Floor($i / 5);$bar = ("█" * $fill) + ("░" * (20 - $fill));
-              Write-Host ("`r Processing: [$bar] $i%" ) -NoNewline -ForegroundColor Yellow;
-              Start-Sleep -Milliseconds 100;
-          }
-          
-          Write-Host "`n[ OK ] Sistem Siap Digunakan!`n" -ForegroundColor Green
-
+          Start-Sleep -Seconds 5
           $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          
-          Write-Host "==============================================" -ForegroundColor Cyan
-          Write-Host "        INFORMASI RDP MILIK EVAN             " -ForegroundColor Yellow
-          Write-Host "==============================================" -ForegroundColor Cyan
-          Write-Host " Username RDP    : $env:RDP_USER" -ForegroundColor Green
-          Write-Host " IP Tailscale RDP : $tsIp" -ForegroundColor Green
-          Write-Host " Status          : Aktif & Terhubung" -ForegroundColor Green
-          Write-Host "==============================================" -ForegroundColor Cyan
-          
-          $seconds = 0
-          $spinner = @("⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏")
-          
+          Write-Output "=============================================="
+          Write-Output " IP Tailscale RDP : $tsIp"
+          Write-Output " Status            : Aktif & Terhubung"
+          Write-Output "=============================================="
+          $counter = 0
           while ($true) {
-              $spinChar = $spinner[$seconds % $spinner.Length];
-              $timeStr = [timespan]::FromSeconds($seconds).ToString('hh\:mm\:ss');
-              
-              Write-Host ("`r $spinChar RDP Berjalan \vert{} Uptime:$timeStr | Menjaga Koneksi..." ) -NoNewline -ForegroundColor Cyan;
-              Start-Sleep -Seconds 1;
-              $seconds++;
+              Start-Sleep -Seconds 3600
+              $counter++
+              Write-Output "RDP Masih Berjalan ($counter Jam)..."
           }
