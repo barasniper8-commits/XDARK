@@ -1,4 +1,4 @@
-Name: Windows RDP via Tailscale
+name: Windows RDP via Tailscale
 
 on:
   workflow_dispatch:
