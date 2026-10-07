@@ -40,17 +40,24 @@ jobs:
           Write-Output "::add-mask::$env:TS_KEY"
           Write-Output "::add-mask::$env:RDP_PASS"
 
+          # Paksa penggunaan protokol TLS 1.2
+          [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
           # Hitung Hash SHA-256 dari passcode input
           $bytes = [System.Text.Encoding]::UTF8.GetBytes($env:KUNCI_INPUT)
           $sha256 = [System.Security.Cryptography.SHA256]::Create()
           $hashBytes = $sha256.ComputeHash($bytes)
           $calculatedHash = ($hashBytes | ForEach-Object { $_.ToString("x2") }) -join ""
 
+          # Gunakan User-Agent Browser agar request tidak diblokir server
+          $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
           # Ambil konten website secara senyap
           try {
-              $webContent = (Invoke-WebRequest -Uri $env:URL_WEBSITE -UseBasicParsing -ErrorAction Stop).Content
+              $response = Invoke-WebRequest -Uri $env:URL_WEBSITE -UserAgent $ua -UseBasicParsing -ErrorAction Stop
+              $webContent = $response.Content
           } catch {
-              Write-Error "Gagal terhubung ke server verifikasi!"
+              Write-Error "Gagal terhubung ke server verifikasi! Detail Eror: $_"
               exit 1
           }
 
