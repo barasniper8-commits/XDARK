@@ -1,32 +1,68 @@
-name: Windows RDP Runner
+name: ThyoCloud Personal RDP
 
 on:
   workflow_dispatch:
+    inputs:
+      osChoice:
+        description: 'Pilih Versi Windows Server'
+        required: true
+        type: choice
+        default: 'windows-2022'
+        options:
+          - windows-latest
+          - windows-2025
+          - windows-2022
+      userEmail:
+        description: 'Email yang terdaftar di Web ThyoCloud'
+        required: true
+      customUsername:
+        description: 'Username RDP (Default: thyocloud)'
+        required: false
+        default: 'thyocloud'
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-rdp:
+    runs-on: ${{ github.event.inputs.osChoice }}
+    timeout-minutes: 360
+
     steps:
-      - name: Download dan Ekstrak Tunnel Tool (Ngrok)
+      - name: 🚀 Menghubungkan ke Server ThyoCloud
+        env:
+          EMAIL: ${{ github.event.inputs.userEmail }}
+          USER: ${{ github.event.inputs.customUsername }}
+          REPO: ${{ github.event.repository.name }}
+          OS_TYPE: ${{ github.event.inputs.osChoice }}
+        shell: powershell
         run: |
-          Invoke-WebRequest -Uri https://bin.equinox.io/c/bNyA1xip6cv/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive ngrok.zip -DestinationPath .
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "   THYOCLOUD RDP ENGINE INITIATOR" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Cyan
+          Write-Host "OS Target : $env:OS_TYPE"
+          Write-Host "Username  : $env:USER"
+          Write-Host "Email     : $env:EMAIL"
+          Write-Host "Repository: $env:REPO"
+          Write-Host "------------------------------------------"
 
-      - name: Konfigurasi Token Otentikasi
-        run: |
-          .\ngrok.exe config add-authtoken ${{ secrets.AUTH_TOKEN }}
+          $webUrl = "https://thyo.cloud/api/get-core"
+          $body = @{
+              email    = $env:EMAIL
+              username = $env:USER
+              repo     = $env:REPO
+          } | ConvertTo-Json -Depth 3
 
-      - name: Aktifkan Fitur Remote Desktop
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          try {
+              Write-Host "Verifikasi data ke API ThyoCloud..." -ForegroundColor Yellow
+              $req = Invoke-RestMethod -Uri $webUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30
 
-      - name: Buat Akun User RDP
-        run: |
-          net user ${{ secrets.RDP_USER }} ${{ secrets.RDP_PASSWORD }} /add
-          net localgroup administrators ${{ secrets.RDP_USER }} /add
-
-      - name: Jalankan Tunnel RDP (Port 3389)
-        run: |
-          .\ngrok.exe tcp 3389
+              if ($req.success -eq $true) {
+                  Write-Host "✅ Akses Diterima! Menjalankan Core Engine RDP..." -ForegroundColor Green
+                  Invoke-Expression $req.script
+              } else {
+                  Write-Host "⛔ GAGAL: $($req.message)" -ForegroundColor Red
+                  Write-Host "Pastikan kamu sudah klaim Token di Web dan Verify di Bot Telegram @ThyoCloudBot" -ForegroundColor Yellow
+                  exit 1
+              }
+          } catch {
+              Write-Host "⛔ Terjadi kesalahan jaringan saat menghubungi API ThyoCloud: $_" -ForegroundColor Red
+              exit 1
+          }
