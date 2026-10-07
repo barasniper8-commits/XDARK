@@ -1,68 +1,96 @@
-name: ThyoCloud Personal RDP
+Name: Windows RDP via Tailscale
 
 on:
   workflow_dispatch:
     inputs:
-      osChoice:
-        description: 'Pilih Versi Windows Server'
+      tailscale_key:
+        description: 'Masukkan Tailscale Auth Key'
         required: true
-        type: choice
-        default: 'windows-2022'
-        options:
-          - windows-latest
-          - windows-2025
-          - windows-2022
-      userEmail:
-        description: 'Email yang terdaftar di Web ThyoCloud'
+        type: string
+      user:
+        description: 'Masukkan Username RDP'
         required: true
-      customUsername:
-        description: 'Username RDP (Default: thyocloud)'
-        required: false
-        default: 'thyocloud'
+        default: 'Arianto'
+        type: string
+      password:
+        description: 'Masukkan Password RDP'
+        required: true
+        type: string
 
 jobs:
-  build-rdp:
-    runs-on: ${{ github.event.inputs.osChoice }}
-    timeout-minutes: 360
-
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360 # Maksimal batas waktu GitHub Actions (6 jam)
+    
     steps:
-      - name: 🚀 Menghubungkan ke Server ThyoCloud
+      - name: Sembunyikan Data Sensitif dari Log
         env:
-          EMAIL: ${{ github.event.inputs.userEmail }}
-          USER: ${{ github.event.inputs.customUsername }}
-          REPO: ${{ github.event.repository.name }}
-          OS_TYPE: ${{ github.event.inputs.osChoice }}
-        shell: powershell
+          TS_KEY: ${{ github.event.inputs.tailscale_key }}
+          RDP_PASS: ${{ github.event.inputs.password }}
         run: |
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "   THYOCLOUD RDP ENGINE INITIATOR" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Cyan
-          Write-Host "OS Target : $env:OS_TYPE"
-          Write-Host "Username  : $env:USER"
-          Write-Host "Email     : $env:EMAIL"
-          Write-Host "Repository: $env:REPO"
-          Write-Host "------------------------------------------"
+          echo "::add-mask::$env:TS_KEY"
+          echo "::add-mask::$env:RDP_PASS"
 
-          $webUrl = "https://thyo.cloud/api/get-core"
-          $body = @{
-              email    = $env:EMAIL
-              username = $env:USER
-              repo     = $env:REPO
-          } | ConvertTo-Json -Depth 3
+      - name: Aktifkan Remote Desktop & Buat Pengguna
+        env:
+          RDP_USER: ${{ github.event.inputs.user }}
+          RDP_PASS: ${{ github.event.inputs.password }}
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+          $Password = ConvertTo-SecureString $env:RDP_PASS -AsPlainText -Force
+          New-LocalUser -Name $env:RDP_USER -Password $Password -PasswordNeverExpires:$true
+          Add-LocalGroupMember -Group "Administrators" -Member $env:RDP_USER
 
-          try {
-              Write-Host "Verifikasi data ke API ThyoCloud..." -ForegroundColor Yellow
-              $req = Invoke-RestMethod -Uri $webUrl -Method Post -Body $body -ContentType "application/json" -TimeoutSec 30
+      - name: Set Foto Profil & Wallpaper Desktop
+        env:
+          RDP_USER: ${{ github.event.inputs.user }}
+        run: |
+          # 1. Download & Pasang Foto Profil User
+          $avatarUrl = "https://raw.githubusercontent.com/Darkreaper02/Darkreaper/refs/heads/main/.github/workflows/FB_IMG_1767958849920.jpg"
+          $avatarPath = "C:\ProgramData\Microsoft\User Account Pictures"
+          Invoke-WebRequest -Uri $avatarUrl -OutFile "C:\avatar.jpg"
+          
+          Copy-Item "C:\avatar.jpg" "$avatarPath\user.png" -Force
+          Copy-Item "C:\avatar.jpg" "$avatarPath\user-192.png" -Force
+          Copy-Item "C:\avatar.jpg" "$avatarPath\user-448.png" -Force
+          Copy-Item "C:\avatar.jpg" "$avatarPath\user-bmp.png" -Force
+          
+          $userSid = (Get-LocalUser -Name $env:RDP_USER).SID.Value
+          $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AccountPicture\Users\$userSid"
+          if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+          New-ItemProperty -Path $regPath -Name "Image448" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
+          New-ItemProperty -Path $regPath -Name "Image192" -Value "C:\avatar.jpg" -PropertyType String -Force | Out-Null
 
-              if ($req.success -eq $true) {
-                  Write-Host "✅ Akses Diterima! Menjalankan Core Engine RDP..." -ForegroundColor Green
-                  Invoke-Expression $req.script
-              } else {
-                  Write-Host "⛔ GAGAL: $($req.message)" -ForegroundColor Red
-                  Write-Host "Pastikan kamu sudah klaim Token di Web dan Verify di Bot Telegram @ThyoCloudBot" -ForegroundColor Yellow
-                  exit 1
-              }
-          } catch {
-              Write-Host "⛔ Terjadi kesalahan jaringan saat menghubungi API ThyoCloud: $_" -ForegroundColor Red
-              exit 1
+          # 2. Download & Pasang Wallpaper Desktop
+          $wallpaperUrl = "https://raw.githubusercontent.com/Darkreaper02/RDPARICRK/refs/heads/main/20261006_011533.png"
+          Invoke-WebRequest -Uri $wallpaperUrl -OutFile "C:\wallpaper.png"
+
+          takeown /f "C:\Windows\Web\Wallpaper\Windows\img0.jpg"
+          icacls "C:\Windows\Web\Wallpaper\Windows\img0.jpg" /grant Administrators:F
+          Copy-Item "C:\wallpaper.png" "C:\Windows\Web\Wallpaper\Windows\img0.jpg" -Force
+
+      - name: Install & Hubungkan Tailscale
+        env:
+          TS_KEY: ${{ github.event.inputs.tailscale_key }}
+        run: |
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe" -OutFile "tailscale-setup.exe"
+          Start-Process -FilePath ".\tailscale-setup.exe" -ArgumentList "/quiet" -Wait
+          
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TS_KEY --accept-routes
+
+      - name: Menjaga RDP Tetap Aktif
+        run: |
+          $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Output "=============================================="
+          Write-Output " IP Tailscale RDP : $tsIp"
+          Write-Output " Status          : Aktif & Terhubung"
+          Write-Output "=============================================="
+          
+          $counter = 0
+          while ($true) {
+              Start-Sleep -Seconds 3600
+              $counter++
+              Write-Output "RDP Masih Berjalan ($counter Jam)..."
           }
