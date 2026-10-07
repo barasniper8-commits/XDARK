@@ -1,4 +1,4 @@
-Name: Windows RDP via Tailscale
+name: Windows RDP via Tailscale
 
 on:
   workflow_dispatch:
@@ -31,18 +31,17 @@ jobs:
         env:
           KUNCI_INPUT: ${{ github.event.inputs.kunci_masuk }}
         run: |
-          # GANTI URL DI BAWAH DENGAN ALAMAT WEB / HALAMAN HTML ANDA
           $url = "https://arianto12.lynk.id/p/ganjeng"
           
           try {
-              # Mengambil HTML/konten dari situs web
+              # Mengambil konten dari halaman Lynk.id
               $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
               
-              # Menghapus tag HTML dan memisahkan teks berdasarkan baris baru atau koma
+              # Menghapus tag HTML dan memisahkan teks berdasarkan baris atau spasi
               $rawText = $response.Content -replace '<[^>]+>', ' '
               $daftarKunci = $rawText -split '[\r\n,]+' | ForEach-Object { $_.Trim() }
               
-              # Pengecekan apakah input pengguna terdaftar di situs web
+              # Pengecekan apakah input passcode ada di dalam konten web
               if ($daftarKunci -contains $env:KUNCI_INPUT.Trim()) {
                   Write-Output "Kunci masuk valid. Memulai pembuatan RDP..."
               } else {
